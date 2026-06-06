@@ -30,6 +30,8 @@ class AvailabilitySearchResult:
 def normalize_zip_code(zip_code: str) -> tuple[str | None, str | None]:
     """Return (normalized_zip, error_code). error_code is partial_zip or invalid_zip."""
     digits = "".join(c for c in zip_code if c.isdigit())
+    if not digits:
+        return None, "invalid_zip"
     if len(digits) == 5:
         return digits, None
     if len(digits) == 9:

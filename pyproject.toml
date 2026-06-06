@@ -12,3 +12,12 @@ select = ["E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.coverage.run]
+omit = [
+    "app/seed.py",
+    "app/voice/bridge.py",
+    "app/voice/session.py",
+    "app/voice/audio.py",
+    "app/services/vision.py",
+]
