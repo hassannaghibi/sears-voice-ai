@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import secrets
-
 import sendgrid
 from sendgrid.helpers.mail import Mail
 
@@ -11,15 +9,24 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-async def send_upload_link(email: str, appliance_type: str, call_sid: str) -> str:
+async def send_upload_link(
+    email: str,
+    appliance_type: str,
+    call_sid: str,
+    *,
+    token: str | None = None,
+) -> str:
     """
-    1. Generate unique token
+    1. Use provided token or generate unique token
     2. Build upload URL
     3. Send SendGrid email with the link
     4. Return the upload URL
     """
-    token = secrets.token_urlsafe(32)
-    upload_url = f"{settings.base_url}/upload/{token}"
+    from app.services.upload import generate_upload_token, upload_url_for_token
+
+    if token is None:
+        token = generate_upload_token()
+    upload_url = upload_url_for_token(token)
 
     subject = f"Sears Home Services — Upload a Photo of Your {appliance_type.title()}"
     html_body = f"""

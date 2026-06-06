@@ -1,6 +1,7 @@
 """Unit tests for voice tool handlers."""
 from __future__ import annotations
 
+from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -39,8 +40,12 @@ async def test_handle_find_available_technicians_found(mock_db):
     slot.start_time = tomorrow.replace(hour=9)
     slot.end_time = tomorrow.replace(hour=11)
 
-    with patch("app.voice.tools.find_available_technicians", new=AsyncMock(
-        return_value=[TechnicianWithSlots(technician=tech, slots=[slot])]
+    with patch("app.voice.tools.find_availability_with_fallback", new=AsyncMock(
+        return_value=MagicMock(
+            technicians=[TechnicianWithSlots(technician=tech, slots=[slot])],
+            matched_date=tomorrow.date(),
+            used_fallback_date=False,
+        )
     )):
         result = await handle_find_available_technicians(
             {"zip_code": "60601", "appliance_type": "washer"}, mock_db, "CA_test"
@@ -52,7 +57,9 @@ async def test_handle_find_available_technicians_found(mock_db):
 
 @pytest.mark.asyncio
 async def test_handle_find_available_technicians_not_found(mock_db):
-    with patch("app.voice.tools.find_available_technicians", new=AsyncMock(return_value=[])):
+    with patch("app.voice.tools.find_availability_with_fallback", new=AsyncMock(
+        return_value=MagicMock(technicians=[], matched_date=date.today(), used_fallback_date=False)
+    )):
         result = await handle_find_available_technicians(
             {"zip_code": "99999", "appliance_type": "hvac"}, mock_db, "CA_test"
         )
@@ -150,3 +157,26 @@ async def test_handle_update_call_state(mock_db):
         )
     assert result["updated"] is True
     assert result["state"] == "DIAGNOSIS"
+
+
+@pytest.mark.asyncio
+async def test_handle_find_available_partial_zip(mock_db):
+    result = await handle_find_available_technicians(
+        {"zip_code": "606", "appliance_type": "washer"}, mock_db, "CA_test"
+    )
+    assert result["error"] == "partial_zip"
+
+
+@pytest.mark.asyncio
+async def test_handle_send_image_upload_link(mock_db):
+    with patch("app.voice.tools.upload_service.create_upload_link", new=AsyncMock(
+        return_value=("tok123", "http://test/voice/upload/tok123")
+    )), patch("app.voice.tools.CallSessionRepository") as mock_repo_cls:
+        mock_repo_cls.return_value.update_state = AsyncMock()
+        result = await handle_send_image_upload_link(
+            {"email": "user@example.com", "appliance_type": "washer"},
+            mock_db,
+            "CA_test",
+        )
+    assert result["sent"] is True
+    assert result["email"] == "user@example.com"

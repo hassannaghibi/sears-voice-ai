@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, WebSocket
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,6 +54,9 @@ async def call_status(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    if not await validate_twilio_signature(request):
+        raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+
     form = await request.form()
     call_sid = form.get("CallSid", "")
     call_status = form.get("CallStatus", "")
@@ -122,3 +125,29 @@ async def upload_form(token: str):
 </body>
 </html>"""
     return HTMLResponse(content=html)
+
+
+@router.post("/upload/{token}/submit")
+async def upload_submit(
+    token: str,
+    photo: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Browser form handler — forwards to vision analysis."""
+    from app.api.v1.routes.images import analyze_uploaded_image
+
+    result = await analyze_uploaded_image(token, photo, db)
+    return HTMLResponse(
+        content=f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Upload Received</title>
+<style>body {{ font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }}
+h1 {{ color: #003087; }}</style></head>
+<body>
+  <h1>Thank you!</h1>
+  <p>Your photo was received and analyzed successfully.</p>
+  <p><strong>Appliance:</strong> {result.appliance_type}</p>
+  <p><strong>Diagnosis:</strong> {result.suggested_diagnosis}</p>
+  <p>Our team will follow up if needed. You may close this window.</p>
+</body></html>""",
+        status_code=200,
+    )

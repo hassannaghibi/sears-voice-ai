@@ -112,6 +112,20 @@ async def test_call_session_update_context_merges(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
+async def test_call_session_get_by_upload_token(db_session: AsyncSession):
+    repo = CallSessionRepository(db_session)
+    await repo.create("CA_token_test")
+    await repo.update_context(
+        "CA_token_test",
+        {"upload_token": "unique-upload-token", "upload_email": "a@b.com"},
+    )
+    session = await repo.get_by_upload_token("unique-upload-token")
+    assert session is not None
+    assert session.call_sid == "CA_token_test"
+    assert await repo.get_by_upload_token("missing") is None
+
+
+@pytest.mark.asyncio
 async def test_call_session_not_found_raises(db_session: AsyncSession):
     repo = CallSessionRepository(db_session)
     with pytest.raises(NotFoundError):

@@ -16,6 +16,23 @@ from app.voice.tools import dispatch_tool
 
 logger = get_logger(__name__)
 
+SLOW_TOOLS = frozenset(
+    {"find_available_technicians", "book_appointment", "send_image_upload_link"}
+)
+
+
+async def _send_filler(session: RealtimeSession) -> None:
+    """Brief spoken filler while a slow tool runs (PROJECT_STANDARDS latency rule)."""
+    await session.send_event(
+        {
+            "type": "response.create",
+            "response": {
+                "modalities": ["text", "audio"],
+                "instructions": "Say briefly: One moment while I look that up for you.",
+            },
+        }
+    )
+
 
 async def run(websocket: WebSocket, call_sid: str, db: AsyncSession) -> None:
     """
@@ -96,6 +113,9 @@ async def run(websocket: WebSocket, call_sid: str, db: AsyncSession) -> None:
                         args = json.loads(raw_args)
                     except json.JSONDecodeError:
                         args = {}
+
+                    if tool_name in SLOW_TOOLS:
+                        await _send_filler(session)
 
                     result = await dispatch_tool(tool_name, args, db, call_sid)
 
