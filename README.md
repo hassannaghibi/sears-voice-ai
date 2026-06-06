@@ -54,26 +54,28 @@ Pushes to the **`dev`** branch trigger [.github/workflows/deploy-dev.yml](.githu
 
 ### Required GitHub Secrets
 
-Configure under **Settings → Secrets and variables → Actions** (and optional `dev` environment):
+The workflow uses **`environment: dev`**. Add secrets under **Settings → Environments → dev → Environment secrets** (not only repository secrets). Missing `SSH_HOST` causes: `Error: missing server host`.
 
-| Secret | Description |
-|--------|-------------|
-| `SSH_HOST` | Server IP (e.g. `165.245.212.11`) |
-| `SSH_USER` | SSH user (`root`) |
-| `SSH_PASSWORD` | SSH password |
-| `POSTGRES_PASSWORD` | DB password |
-| `OPENAI_API_KEY` | OpenAI API key |
-| `TWILIO_ACCOUNT_SID` | Twilio SID |
-| `TWILIO_AUTH_TOKEN` | Twilio auth token |
-| `TWILIO_PHONE_NUMBER` | Twilio number |
-| `BASE_URL` | Public URL (e.g. `https://165-245-212-11.sslip.io`) |
-| `SECRET_KEY` | App secret (32+ chars) |
-| `NGINX_SERVER_NAME` | TLS domain (default in script: `165-245-212-11.sslip.io`) |
-| `CERTBOT_EMAIL` | Email for Let's Encrypt |
-| `SENDGRID_API_KEY` | Optional — Tier 3 email |
-| `FROM_EMAIL` | Sender email for upload links |
+| Secret | Required | Value for dev server |
+|--------|----------|----------------------|
+| `SSH_HOST` | Yes | `165.245.212.11` |
+| `SSH_USER` | Yes | `root` |
+| `SSH_PASSWORD` | Yes | *(your server password — GitHub only)* |
+| `POSTGRES_PASSWORD` | Yes | `SearsDevPass2026!` |
+| `OPENAI_API_KEY` | Yes | Real `sk-...` key (server currently has placeholder) |
+| `TWILIO_ACCOUNT_SID` | Yes | Real `AC...` SID (server currently has placeholder) |
+| `TWILIO_AUTH_TOKEN` | Yes | Real auth token |
+| `TWILIO_PHONE_NUMBER` | Yes | Real `+1...` number |
+| `BASE_URL` | Yes | `https://165-245-212-11.sslip.io` |
+| `SECRET_KEY` | Yes | 32+ char random string |
+| `NGINX_SERVER_NAME` | First deploy | `165-245-212-11.sslip.io` |
+| `CERTBOT_EMAIL` | First deploy | Your email for Let's Encrypt |
+| `SENDGRID_API_KEY` | Tier 3 | SendGrid API key |
+| `FROM_EMAIL` | Tier 3 | Verified sender address |
 
 Server app directory: `/opt/sears-voice-ai`
+
+Full audit (what is set vs placeholder on the server): [docs/SECRETS.md](docs/SECRETS.md)
 
 ## Testing
 
@@ -87,6 +89,7 @@ E2E_BASE_URL=http://localhost:8000 pytest tests/e2e -m e2e -v
 
 ## Project docs
 
-- [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) — build phases
-- [PROJECT_STANDARDS.md](PROJECT_STANDARDS.md) — engineering rules
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — sequence diagrams
+- [docs/TECHNICAL_DESIGN.md](docs/TECHNICAL_DESIGN.md) — design rationale
+- [docs/SECRETS.md](docs/SECRETS.md) — credentials & deploy secrets
 - [docs/adr/](docs/adr/) — architecture decision records
