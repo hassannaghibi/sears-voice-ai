@@ -60,6 +60,7 @@ systemctl reload nginx
 echo "==> Updating BASE_URL in ${APP_DIR}/.env ..."
 if [ -f "${APP_DIR}/.env" ]; then
   sed -i "s|^BASE_URL=.*|BASE_URL=https://${SERVER_NAME}|" "${APP_DIR}/.env"
+  cd "${APP_DIR}" && docker compose up -d api 2>/dev/null || true
 else
   echo "WARN: ${APP_DIR}/.env not found — set BASE_URL=https://${SERVER_NAME} manually"
 fi
