@@ -4,7 +4,15 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import os
 from collections.abc import AsyncGenerator
+
+# Test defaults before app settings load
+os.environ.setdefault("OPENAI_API_KEY", "sk-test-key")
+os.environ.setdefault("TWILIO_ACCOUNT_SID", "ACtest0000000000000000000000000000")
+os.environ.setdefault("TWILIO_AUTH_TOKEN", "test_auth_token")
+os.environ.setdefault("TWILIO_PHONE_NUMBER", "+15555550100")
+os.environ.setdefault("BASE_URL", "http://test")
 
 import pytest
 import pytest_asyncio

@@ -62,7 +62,7 @@ class Specialty(Base):
         Integer, ForeignKey("technicians.id", ondelete="CASCADE"), nullable=False
     )
     appliance_type: Mapped[ApplianceType] = mapped_column(
-        Enum(ApplianceType, native_enum=False),
+        Enum(ApplianceType, name="appliancetype", native_enum=True, create_constraint=False),
         nullable=False,
     )
 

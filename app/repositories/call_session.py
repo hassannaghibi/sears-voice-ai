@@ -49,3 +49,11 @@ class CallSessionRepository:
         session.context = merged
         await self.db.flush()
         return session
+
+    async def get_by_upload_token(self, token: str) -> CallSession | None:
+        """Find call session by upload token stored in JSON context."""
+        result = await self.db.execute(select(CallSession))
+        for session in result.scalars():
+            if session.context.get("upload_token") == token:
+                return session
+        return None
