@@ -1,0 +1,32 @@
+#!/bin/bash
+# Write /opt/sears-voice-ai/.env from environment variables (GitHub Actions or manual).
+set -euo pipefail
+
+APP_DIR="${APP_DIR:-/opt/sears-voice-ai}"
+ENV_FILE="${APP_DIR}/.env"
+
+: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
+: "${BASE_URL:?BASE_URL is required}"
+: "${SECRET_KEY:?SECRET_KEY is required}"
+
+cat > "${ENV_FILE}" <<EOF
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+POSTGRES_DB=sears_voice
+POSTGRES_USER=sears
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+OPENAI_API_KEY=${OPENAI_API_KEY:-}
+TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER:-}
+BASE_URL=${BASE_URL}
+APP_ENV=${APP_ENV:-production}
+SECRET_KEY=${SECRET_KEY}
+LOG_LEVEL=${LOG_LEVEL:-INFO}
+SENDGRID_API_KEY=${SENDGRID_API_KEY:-}
+FROM_EMAIL=${FROM_EMAIL:-alex@sears-voice.example.com}
+UPLOAD_LINK_TTL_HOURS=${UPLOAD_LINK_TTL_HOURS:-24}
+EOF
+
+chmod 600 "${ENV_FILE}"
+echo "==> Wrote ${ENV_FILE}"
