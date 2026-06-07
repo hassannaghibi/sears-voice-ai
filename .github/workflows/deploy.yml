@@ -1,0 +1,124 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev]
+    types: [closed]
+
+jobs:
+  deploy:
+    # Run on direct push to dev/main, OR on a merged PR to dev
+    if: github.event_name == 'push' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Validate required secrets
+        run: |
+          missing=()
+          [ -z "${{ secrets.SSH_HOST }}"            ] && missing+=("SSH_HOST")
+          [ -z "${{ secrets.SSH_USER }}"            ] && missing+=("SSH_USER")
+          [ -z "${{ secrets.SSH_PASSWORD }}"        ] && missing+=("SSH_PASSWORD")
+          [ -z "${{ secrets.POSTGRES_PASSWORD }}"   ] && missing+=("POSTGRES_PASSWORD")
+          [ -z "${{ secrets.SECRET_KEY }}"          ] && missing+=("SECRET_KEY")
+          [ -z "${{ secrets.BASE_URL }}"            ] && missing+=("BASE_URL")
+          [ -z "${{ secrets.OPENAI_API_KEY }}"      ] && missing+=("OPENAI_API_KEY")
+          [ -z "${{ secrets.TWILIO_ACCOUNT_SID }}"  ] && missing+=("TWILIO_ACCOUNT_SID")
+          [ -z "${{ secrets.TWILIO_AUTH_TOKEN }}"   ] && missing+=("TWILIO_AUTH_TOKEN")
+          [ -z "${{ secrets.TWILIO_PHONE_NUMBER }}" ] && missing+=("TWILIO_PHONE_NUMBER")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+          echo "All required secrets present."
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: 22
+          script_stop: true
+          envs: BRANCH_NAME
+          script: |
+            set -e
+            BRANCH="${{ github.head_ref || github.ref_name }}"
+            REPO_DIR=/root/sears-voice-ai
+
+            echo "==> Pulling branch: $BRANCH"
+            cd $REPO_DIR
+            git fetch origin
+            git checkout $BRANCH
+            git reset --hard origin/$BRANCH
+
+            echo "==> Writing .env"
+            cat > $REPO_DIR/.env << 'ENVEOF'
+            # Database
+            POSTGRES_HOST=db
+            POSTGRES_PORT=5432
+            POSTGRES_DB=sears_voice
+            POSTGRES_USER=sears
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+
+            # OpenAI
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+
+            # Twilio
+            TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
+            TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
+            TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}
+
+            # App
+            BASE_URL=${{ secrets.BASE_URL }}
+            APP_ENV=${{ secrets.APP_ENV || 'production' }}
+            SECRET_KEY=${{ secrets.SECRET_KEY }}
+            LOG_LEVEL=INFO
+
+            # Tier 3 — Visual Diagnosis
+            SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}
+            FROM_EMAIL=alex@sears-voice.example.com
+            UPLOAD_LINK_TTL_HOURS=24
+            ENVEOF
+
+            echo "==> Rebuilding containers"
+            docker compose down --remove-orphans
+            docker compose up --build -d
+
+            echo "==> Waiting for API to become healthy (up to 90s)..."
+            for i in $(seq 1 18); do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health || true)
+              if [ "$STATUS" = "200" ]; then
+                echo "API healthy after $((i*5))s"
+                break
+              fi
+              echo "  Attempt $i: status=$STATUS, waiting 5s..."
+              sleep 5
+            done
+
+            # Final check — fail the deploy if still not healthy
+            FINAL=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health || true)
+            if [ "$FINAL" != "200" ]; then
+              echo "ERROR: API did not become healthy. Last status: $FINAL"
+              docker compose logs --tail=50 api
+              exit 1
+            fi
+
+            echo "==> Deploy complete."
+            curl -s http://localhost:8000/health
+
+      - name: Post deployment summary
+        if: success()
+        run: |
+          echo "### Deployment successful" >> $GITHUB_STEP_SUMMARY
+          echo "- Branch: \`${{ github.head_ref || github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Server: \`${{ secrets.SSH_HOST }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Health: \`${{ secrets.BASE_URL }}/health\`" >> $GITHUB_STEP_SUMMARY
