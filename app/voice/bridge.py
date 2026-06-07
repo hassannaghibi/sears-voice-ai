@@ -20,8 +20,11 @@ logger = get_logger(__name__)
 async def run(websocket: WebSocket, call_sid: str, db: AsyncSession) -> None:
     """
     Main audio bridge: two concurrent asyncio tasks.
-    Task A: Twilio → OpenAI
-    Task B: OpenAI → Twilio
+    Task A: Twilio -> OpenAI
+    Task B: OpenAI -> Twilio
+
+    When Twilio sends 'stop', task_a closes the OpenAI WebSocket, which causes
+    task_b's recv_event() to return None (ConnectionClosed), terminating cleanly.
     """
     session = RealtimeSession(call_sid)
 
@@ -58,10 +61,13 @@ async def run(websocket: WebSocket, call_sid: str, db: AsyncSession) -> None:
 
                 elif event_type == "stop":
                     logger.info("twilio_stream_stopped", call_sid=call_sid)
+                    # Closing the OpenAI WS causes task_b to exit via ConnectionClosed -> None
+                    await session.close()
                     break
 
         except Exception as exc:
             logger.error("twilio_to_openai_error", call_sid=call_sid, error=str(exc))
+            await session.close()
 
     async def openai_to_twilio() -> None:
         try:
@@ -127,6 +133,7 @@ async def run(websocket: WebSocket, call_sid: str, db: AsyncSession) -> None:
         if isinstance(r, Exception):
             logger.error("bridge_task_exception", call_sid=call_sid, error=str(r))
 
+    # Final cleanup — safe to call even if already closed by task_a
     await session.close()
     try:
         await websocket.close()
