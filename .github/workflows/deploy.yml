@@ -9,7 +9,6 @@ on:
 
 jobs:
   deploy:
-    # Run on direct push to dev/main, OR on a merged PR to dev
     if: github.event_name == 'push' || github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     environment: production
@@ -47,7 +46,8 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           port: 22
           script_stop: true
-          envs: BRANCH_NAME
+          request_pty: true
+          command_timeout: 20m
           script: |
             set -e
             BRANCH="${{ github.head_ref || github.ref_name }}"
@@ -60,37 +60,47 @@ jobs:
             git reset --hard origin/$BRANCH
 
             echo "==> Writing .env"
-            cat > $REPO_DIR/.env << 'ENVEOF'
-            # Database
-            POSTGRES_HOST=db
-            POSTGRES_PORT=5432
-            POSTGRES_DB=sears_voice
-            POSTGRES_USER=sears
-            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            cat > $REPO_DIR/.env << ENVEOF
+# Database
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+POSTGRES_DB=sears_voice
+POSTGRES_USER=sears
+POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
 
-            # OpenAI
-            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+# LLM provider selection (set to "anthropic" to use Claude, "openai" to use GPT)
+VOICE_LLM_PROVIDER=anthropic
+VISION_LLM_PROVIDER=anthropic
 
-            # Twilio
-            TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
-            TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
-            TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}
+# Anthropic (primary LLM - Claude)
+ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
 
-            # App
-            BASE_URL=${{ secrets.BASE_URL }}
-            APP_ENV=${{ secrets.APP_ENV || 'production' }}
-            SECRET_KEY=${{ secrets.SECRET_KEY }}
-            LOG_LEVEL=INFO
+# OpenAI (optional - only needed if VOICE_LLM_PROVIDER or VISION_LLM_PROVIDER = "openai")
+OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
 
-            # Tier 3 — Visual Diagnosis
-            SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}
-            FROM_EMAIL=alex@sears-voice.example.com
-            UPLOAD_LINK_TTL_HOURS=24
-            ENVEOF
+# Twilio
+TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
+TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
+TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}
 
-            echo "==> Rebuilding containers"
+# App
+BASE_URL=${{ secrets.BASE_URL }}
+APP_ENV=production
+SECRET_KEY=${{ secrets.SECRET_KEY }}
+LOG_LEVEL=INFO
+
+# Tier 3 - Visual Diagnosis
+SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}
+FROM_EMAIL=alex@sears-voice.example.com
+UPLOAD_LINK_TTL_HOURS=24
+ENVEOF
+
+            echo "==> Building Docker images (this may take a few minutes)..."
+            docker compose build
+
+            echo "==> Starting containers"
             docker compose down --remove-orphans
-            docker compose up --build -d
+            docker compose up -d
 
             echo "==> Waiting for API to become healthy (up to 90s)..."
             for i in $(seq 1 18); do
@@ -103,11 +113,10 @@ jobs:
               sleep 5
             done
 
-            # Final check — fail the deploy if still not healthy
             FINAL=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health || true)
             if [ "$FINAL" != "200" ]; then
               echo "ERROR: API did not become healthy. Last status: $FINAL"
-              docker compose logs --tail=50 api
+              docker compose logs --tail=80 api
               exit 1
             fi
 
