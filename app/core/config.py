@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     openai_realtime_model: str = "gpt-4o-realtime-preview"
     openai_vision_model: str = "gpt-4o"
-    anthropic_model: str = "claude-sonnet-4-20250514"
+    anthropic_model: str = "claude-sonnet-4-6"
 
     # Twilio
     twilio_account_sid: str
