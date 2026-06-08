@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import xml.sax.saxutils as saxutils
 
@@ -40,7 +41,7 @@ def _twiml_say_gather(text: str, action_url: str) -> str:
         "<Response>"
         f'<Say voice="{_VOICE}">{safe}</Say>'
         f'<Gather input="speech" action="{action_url}" method="POST" '
-        'speechTimeout="3" timeout="10"/>'
+        'speechTimeout="5" timeout="15"/>'
         f"<Redirect>{action_url}</Redirect>"
         "</Response>"
     )
@@ -191,7 +192,14 @@ async def voice_respond(
     messages.append({"role": "user", "content": speech_result})
 
     try:
-        reply, should_hangup = await _run_claude(messages, db, call_sid)
+        reply, should_hangup = await asyncio.wait_for(
+            _run_claude(messages, db, call_sid),
+            timeout=12.0,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("claude_timeout", call_sid=call_sid)
+        reply = "Sorry, that took too long. Could you repeat what you said?"
+        should_hangup = False
     except Exception as exc:
         logger.error("claude_error", call_sid=call_sid, error=str(exc))
         reply = "I'm sorry, I'm having some trouble right now. Please call back shortly."
