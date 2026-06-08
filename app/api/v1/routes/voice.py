@@ -58,6 +58,21 @@ def _twiml_say_hangup(text: str) -> str:
     )
 
 
+def _serialize_content(content_block) -> dict:
+    """Convert Anthropic SDK content block objects to plain JSON-serializable dicts."""
+    t = getattr(content_block, "type", None)
+    if t == "text":
+        return {"type": "text", "text": content_block.text}
+    if t == "tool_use":
+        return {
+            "type": "tool_use",
+            "id": content_block.id,
+            "name": content_block.name,
+            "input": content_block.input,
+        }
+    return {"type": "unknown", "raw": str(content_block)}
+
+
 async def _run_claude(
     messages: list[dict],
     db: AsyncSession,
@@ -89,13 +104,15 @@ async def _run_claude(
         if response.stop_reason != "tool_use" or not tool_uses:
             break
 
-        messages.append({"role": "assistant", "content": response.content})
+        # Convert SDK objects → plain dicts so messages stay JSON-serializable
+        serialized_content = [_serialize_content(b) for b in response.content]
+        messages.append({"role": "assistant", "content": serialized_content})
+
         tool_results = []
         for tu in tool_uses:
             args = tu.input if isinstance(tu.input, dict) else {}
             result = await dispatch_tool(tu.name, args, db, call_sid)
 
-            # Detect end-of-call state transitions
             if tu.name == "update_call_state" and args.get("new_state") in (
                 "COMPLETED", "CALLBACK_CAPTURE"
             ):
