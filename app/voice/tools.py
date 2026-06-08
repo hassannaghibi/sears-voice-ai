@@ -246,6 +246,12 @@ async def handle_update_call_state(
     return {"updated": True, "state": new_state_str}
 
 
+# Tools that take noticeable time — bridge plays a filler phrase while they run
+SLOW_TOOLS: frozenset[str] = frozenset(
+    {"find_available_technicians", "book_appointment", "send_image_upload_link"}
+)
+
+
 TOOL_HANDLERS = {
     "find_available_technicians": handle_find_available_technicians,
     "book_appointment": handle_book_appointment,
