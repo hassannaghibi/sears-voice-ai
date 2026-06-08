@@ -38,6 +38,21 @@ jobs:
           fi
           echo "All required secrets present."
 
+      - name: Export secrets as env vars for SSH
+        run: |
+          echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"   >> $GITHUB_ENV
+          echo "SECRET_KEY=${{ secrets.SECRET_KEY }}"                 >> $GITHUB_ENV
+          echo "BASE_URL=${{ secrets.BASE_URL }}"                     >> $GITHUB_ENV
+          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}"   >> $GITHUB_ENV
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"         >> $GITHUB_ENV
+          echo "TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}" >> $GITHUB_ENV
+          echo "TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}"   >> $GITHUB_ENV
+          echo "TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}" >> $GITHUB_ENV
+          echo "SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}"     >> $GITHUB_ENV
+          echo "APP_ENV=production"                                    >> $GITHUB_ENV
+          echo "VOICE_LLM_PROVIDER=anthropic"                         >> $GITHUB_ENV
+          echo "VISION_LLM_PROVIDER=anthropic"                        >> $GITHUB_ENV
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -46,7 +61,8 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           port: 22
           script_stop: true
-          command_timeout: 20m
+          command_timeout: 10m
+          envs: POSTGRES_PASSWORD,SECRET_KEY,BASE_URL,ANTHROPIC_API_KEY,OPENAI_API_KEY,TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN,TWILIO_PHONE_NUMBER,SENDGRID_API_KEY,APP_ENV,VOICE_LLM_PROVIDER,VISION_LLM_PROVIDER
           script: |
             set -e
             BRANCH="${{ github.head_ref || github.ref_name }}"
@@ -59,31 +75,9 @@ jobs:
             git reset --hard "origin/$BRANCH"
 
             echo "==> Writing .env"
-            cat > "$APP_DIR/.env" << ENVEOF
-POSTGRES_HOST=db
-POSTGRES_PORT=5432
-POSTGRES_DB=sears_voice
-POSTGRES_USER=sears
-POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-VOICE_LLM_PROVIDER=anthropic
-VISION_LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
-OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
-TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
-TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}
-BASE_URL=${{ secrets.BASE_URL }}
-APP_ENV=production
-SECRET_KEY=${{ secrets.SECRET_KEY }}
-LOG_LEVEL=INFO
-SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}
-FROM_EMAIL=alex@sears-voice.example.com
-UPLOAD_LINK_TTL_HOURS=24
-ENVEOF
-            chmod 600 "$APP_DIR/.env"
-            echo "==> Wrote $APP_DIR/.env"
+            bash "$APP_DIR/write-env.sh"
 
-            echo "==> Running deploy script..."
+            echo "==> Deploying..."
             bash "$APP_DIR/scripts/deploy.sh"
 
       - name: Post deployment summary
