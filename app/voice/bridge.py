@@ -11,6 +11,8 @@ from app.core.logging import get_logger
 from app.models.call_session import CallState
 from app.repositories.call_session import CallSessionRepository
 from app.voice.audio import pcm16_to_ulaw, ulaw_to_pcm16
+from app.core.config import settings
+from app.voice.context import load_context_block
 from app.voice.session import RealtimeSession
 from app.voice.tools import dispatch_tool
 
@@ -35,12 +37,24 @@ async def _send_filler(session: RealtimeSession) -> None:
 
 
 async def run(websocket: WebSocket, call_sid: str, db: AsyncSession) -> None:
+    """Route to OpenAI Realtime or Anthropic voice pipeline based on VOICE_LLM_PROVIDER."""
+    if settings.voice_llm_provider == "anthropic":
+        from app.voice import anthropic_bridge
+
+        await anthropic_bridge.run(websocket, call_sid, db)
+        return
+
+    await run_openai(websocket, call_sid, db)
+
+
+async def run_openai(websocket: WebSocket, call_sid: str, db: AsyncSession) -> None:
     """
-    Main audio bridge: two concurrent asyncio tasks.
+    OpenAI Realtime audio bridge: two concurrent asyncio tasks.
     Task A: Twilio → OpenAI
     Task B: OpenAI → Twilio
     """
-    session = RealtimeSession(call_sid)
+    context_block = await load_context_block(call_sid, db)
+    session = RealtimeSession(call_sid, extra_instructions=context_block)
 
     try:
         await session.connect()
