@@ -16,7 +16,7 @@ from app.core.security import validate_twilio_signature
 from app.models.call_session import CallState
 from app.repositories.call_session import CallSessionRepository
 from app.voice.anthropic_tools import anthropic_tool_definitions
-from app.voice.prompts import build_system_prompt
+from app.voice.prompts import INITIAL_GREETING, build_system_prompt
 from app.voice.tools import SLOW_TOOLS, dispatch_tool
 
 logger = get_logger(__name__)
@@ -26,11 +26,7 @@ router = APIRouter(prefix="/voice", tags=["voice"])
 # Twilio Polly Neural voice — reliable, high quality, no external TTS API needed
 _VOICE = "Polly.Joanna-Neural"
 
-GREETING = (
-    "Hello, thank you for calling Sears Home Services. "
-    "I'm Alex, your service advisor. "
-    "Which appliance can I help you with today?"
-)
+from app.voice.prompts import INITIAL_GREETING as GREETING  # noqa: F811
 
 
 def _twiml_say_gather(text: str, action_url: str) -> str:
@@ -187,6 +183,11 @@ async def voice_respond(
 
     context = session.context or {}
     messages: list[dict] = context.get("messages", [])
+
+    # Seed the static greeting as the first assistant message so Claude
+    # knows it was already delivered and never re-greets the caller.
+    if not messages:
+        messages = [{"role": "assistant", "content": INITIAL_GREETING}]
 
     logger.info("voice_respond", call_sid=call_sid, speech=speech_result[:120])
     messages.append({"role": "user", "content": speech_result})

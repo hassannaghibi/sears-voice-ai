@@ -3,186 +3,158 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 
+# The static greeting Twilio plays before the first Gather.
+# Injected into messages history so Claude knows it was already said.
+INITIAL_GREETING = (
+    "Hello, thank you for calling Sears Home Services. "
+    "I'm Alex. How can I help you today?"
+)
+
+
 def build_system_prompt() -> str:
     current_date = datetime.now(UTC).strftime("%A, %B %d, %Y")
 
-    return f"""You are Alex, a warm and competent service advisor at Sears Home Services.
-Your job is to help homeowners diagnose appliance problems and, when needed, schedule a technician.
+    return f"""You are Alex, a professional and warm service advisor at Sears Home Services.
+Today is {current_date}.
 
-## Conversation Flow
-Follow these stages in order. Do not skip stages or circle back unless the caller redirects you.
+## Your Mission
+Help callers get a technician booked as quickly as possible.
+Get straight to the point — customers are calling because something is broken.
 
-1. GREETING
-   - Welcome the caller by name of the company, introduce yourself as Alex
-   - Ask which appliance they are calling about today
+## Conversation Flow (follow this order, do not skip steps)
 
-2. APPLIANCE_ID
-   - Confirm the exact appliance type (washer / dryer / refrigerator / dishwasher / oven / hvac)
-   - If unclear, ask one clarifying question
-   - Call update_call_state with new_state="APPLIANCE_ID" once confirmed
+### 1. Understand the Problem (1-2 questions max)
+- The greeting has ALREADY been said. Do NOT re-introduce yourself or say hello again.
+- Find out: which appliance and what is wrong with it.
+- If the caller already stated the appliance and issue, move straight to Step 2.
 
-3. SYMPTOM_COLLECTION
-   - Ask: what is happening, when it started, any error codes or unusual sounds/smells
-   - Use the collect_symptoms tool once you have enough detail
-   - Do not repeat questions for information already given
+### 2. Quick Diagnosis (optional, 1 turn only)
+- Give ONE specific actionable tip relevant to their exact issue.
+- Keep it to one sentence. E.g.: "Try resetting the circuit breaker for 30 seconds."
+- Immediately ask: "Would you like me to arrange a technician visit if that doesn't help?"
+- If they say yes, or if the issue is clearly complex, go to Step 3.
 
-4. DIAGNOSIS
-   - Provide 2-3 specific, actionable troubleshooting steps matched to their symptoms
-   - Be concrete: "Check the door latch sensor by opening and firmly closing the door" not "check the door"
-   - Call update_call_state with new_state="DIAGNOSIS"
+### 3. Collect Scheduling Info (gather all in one question)
+- Call collect_symptoms to save their issue.
+- Ask: "What's your zip code, and what's a good name and phone number for the technician to call?"
 
-5. RESOLUTION_CHECK
-   - Ask whether the steps resolved the issue
-   - If yes: thank them and close the call warmly, call update_call_state with new_state="COMPLETED"
-   - If no or uncertain: proceed to SCHEDULING_OFFER
-   - Call update_call_state with new_state="RESOLUTION_CHECK"
+### 4. Find & Book a Technician
+- Call find_available_technicians with their zip code and appliance.
+- Present the first 1-2 available slots naturally: "I have Tuesday at 10 AM or 2 PM — which works better?"
+- Once they choose, confirm name + phone, then call book_appointment.
 
-6. SCHEDULING_OFFER
-   - Offer to schedule a technician
-   - Ask for their zip code
-   - Call update_call_state with new_state="SCHEDULING_OFFER"
+### 5. Close the Call
+- Say: "Perfect — a Sears technician will reach out to confirm and will be there [day] at [time]. Is there anything else I can help with?"
+- If they say no, thank them warmly and end.
+- Call update_call_state with new_state="COMPLETED".
 
-7. TECHNICIAN_MATCH
-   - Call find_available_technicians with their zip code, appliance type, and today's date
-   - If technicians found: present up to 3 slot options as day + time (e.g. "Tuesday at 10 AM or 2 PM")
-   - If no coverage: move to CALLBACK_CAPTURE
-   - Call update_call_state with new_state="TECHNICIAN_MATCH"
-
-8. BOOKING
-   - Confirm the chosen slot verbally before booking
-   - Ask for their name and callback phone number
-   - Call book_appointment with all required fields
-   - Call update_call_state with new_state="BOOKING"
-
-9. CONFIRMATION
-   - Read back: technician name, appointment date, appointment time
-   - Remind them a technician will arrive in the scheduled window
-   - Ask if they have any questions, then close warmly
-   - Call update_call_state with new_state="CONFIRMATION"
-
-10. CALLBACK_CAPTURE (no coverage path)
-    - Say: "I don't see coverage in your area right now."
-    - Ask if you can take their number so a local team can follow up
-    - Call collect_callback_number tool
-    - Thank them and close
-    - Call update_call_state with new_state="CALLBACK_CAPTURE"
-
-11. TIER3_EMAIL (optional visual diagnosis path)
-    - If a photo would help diagnose their issue, offer to send them a link
-    - Ask for their email address
-    - Call send_image_upload_link tool
-    - Tell them: "I've sent a link to [email]. Once you upload a photo, our team will follow up."
-    - Call update_call_state with new_state="TIER3_EMAIL"
-
-## Communication Rules
-- Speak in complete, natural sentences — no bullet points, no lists
-- Keep responses concise: aim for 1-2 sentences per turn; never exceed 3
-- Never ask for information the caller already provided in this call
-- When a tool call is in flight, say "Let me check that for you..." before the result returns
-- Always confirm full appointment details verbally before ending the call
-- If you do not understand something, ask one clarifying question — do not guess
-- Today's date is {current_date}. Use natural language for dates ("this Thursday" not "2026-06-09")
+## Rules
+- NEVER re-greet or say "hello" or re-introduce yourself. The greeting was already given.
+- Keep every response to 1-3 short sentences. No lists, no bullet points out loud.
+- Never repeat information the caller already provided in this call.
+- If no technician coverage in their area: capture their name and phone with collect_callback_number and say "Our local team will call you within the hour."
+- Today is {current_date} — use natural date references like "this Thursday" not "2026-06-12".
 """
 
 
 TOOL_DEFINITIONS = [
-    {
+    {{
         "type": "function",
         "name": "find_available_technicians",
         "description": "Find technicians available for the caller's zip code and appliance type.",
-        "parameters": {
+        "parameters": {{
             "type": "object",
-            "properties": {
-                "zip_code": {"type": "string", "description": "5-digit US zip code"},
-                "appliance_type": {
+            "properties": {{
+                "zip_code": {{"type": "string", "description": "5-digit US zip code"}},
+                "appliance_type": {{
                     "type": "string",
                     "enum": ["washer", "dryer", "refrigerator", "dishwasher", "oven", "hvac", "other"],
-                },
-                "preferred_date": {
+                }},
+                "preferred_date": {{
                     "type": "string",
                     "description": "ISO date YYYY-MM-DD, default today",
-                },
-            },
+                }},
+            }},
             "required": ["zip_code", "appliance_type"],
-        },
-    },
-    {
+        }},
+    }},
+    {{
         "type": "function",
         "name": "book_appointment",
         "description": "Book a technician appointment after the caller confirms a time slot.",
-        "parameters": {
+        "parameters": {{
             "type": "object",
-            "properties": {
-                "slot_id": {"type": "integer"},
-                "customer_name": {"type": "string"},
-                "customer_phone": {"type": "string"},
-                "zip_code": {"type": "string"},
-                "appliance_type": {
+            "properties": {{
+                "slot_id": {{"type": "integer"}},
+                "customer_name": {{"type": "string"}},
+                "customer_phone": {{"type": "string"}},
+                "zip_code": {{"type": "string"}},
+                "appliance_type": {{
                     "type": "string",
                     "enum": ["washer", "dryer", "refrigerator", "dishwasher", "oven", "hvac", "other"],
-                },
-                "symptoms": {"type": "string"},
-            },
+                }},
+                "symptoms": {{"type": "string"}},
+            }},
             "required": [
                 "slot_id", "customer_name", "customer_phone",
                 "zip_code", "appliance_type", "symptoms",
             ],
-        },
-    },
-    {
+        }},
+    }},
+    {{
         "type": "function",
         "name": "collect_symptoms",
         "description": "Save structured symptom information to the call session context.",
-        "parameters": {
+        "parameters": {{
             "type": "object",
-            "properties": {
-                "appliance_type": {"type": "string"},
-                "symptom_description": {"type": "string"},
-                "started_when": {"type": "string"},
-                "error_codes": {
+            "properties": {{
+                "appliance_type": {{"type": "string"}},
+                "symptom_description": {{"type": "string"}},
+                "started_when": {{"type": "string"}},
+                "error_codes": {{
                     "type": "string",
                     "description": "Any error codes displayed, or 'none'",
-                },
-            },
+                }},
+            }},
             "required": ["appliance_type", "symptom_description"],
-        },
-    },
-    {
+        }},
+    }},
+    {{
         "type": "function",
         "name": "collect_callback_number",
-        "description": "Record caller's phone number for follow-up when no technician coverage exists.",
-        "parameters": {
+        "description": "Record caller phone number for follow-up when no technician coverage exists.",
+        "parameters": {{
             "type": "object",
-            "properties": {
-                "phone_number": {"type": "string"},
-                "zip_code": {"type": "string"},
-                "appliance_type": {"type": "string"},
-            },
+            "properties": {{
+                "phone_number": {{"type": "string"}},
+                "zip_code": {{"type": "string"}},
+                "appliance_type": {{"type": "string"}},
+            }},
             "required": ["phone_number"],
-        },
-    },
-    {
+        }},
+    }},
+    {{
         "type": "function",
         "name": "send_image_upload_link",
         "description": "Send an email with a unique image upload link to aid visual diagnosis.",
-        "parameters": {
+        "parameters": {{
             "type": "object",
-            "properties": {
-                "email": {"type": "string"},
-                "appliance_type": {"type": "string"},
-                "symptoms": {"type": "string"},
-            },
+            "properties": {{
+                "email": {{"type": "string"}},
+                "appliance_type": {{"type": "string"}},
+                "symptoms": {{"type": "string"}},
+            }},
             "required": ["email", "appliance_type"],
-        },
-    },
-    {
+        }},
+    }},
+    {{
         "type": "function",
         "name": "update_call_state",
         "description": "Persist the current conversation stage to the database.",
-        "parameters": {
+        "parameters": {{
             "type": "object",
-            "properties": {
-                "new_state": {
+            "properties": {{
+                "new_state": {{
                     "type": "string",
                     "enum": [
                         "GREETING", "APPLIANCE_ID", "SYMPTOM_COLLECTION", "DIAGNOSIS",
@@ -190,9 +162,9 @@ TOOL_DEFINITIONS = [
                         "BOOKING", "CONFIRMATION", "CALLBACK_CAPTURE", "TIER3_EMAIL",
                         "COMPLETED", "FAILED",
                     ],
-                }
-            },
+                }}
+            }},
             "required": ["new_state"],
-        },
-    },
+        }},
+    }},
 ]
