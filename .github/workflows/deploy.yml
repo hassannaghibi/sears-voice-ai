@@ -29,7 +29,7 @@ jobs:
           [ -z "${{ secrets.POSTGRES_PASSWORD }}"   ] && missing+=("POSTGRES_PASSWORD")
           [ -z "${{ secrets.SECRET_KEY }}"          ] && missing+=("SECRET_KEY")
           [ -z "${{ secrets.BASE_URL }}"            ] && missing+=("BASE_URL")
-          [ -z "${{ secrets.OPENAI_API_KEY }}"      ] && missing+=("OPENAI_API_KEY")
+          [ -z "${{ secrets.ANTHROPIC_API_KEY }}"   ] && missing+=("ANTHROPIC_API_KEY")
           [ -z "${{ secrets.TWILIO_ACCOUNT_SID }}"  ] && missing+=("TWILIO_ACCOUNT_SID")
           [ -z "${{ secrets.TWILIO_AUTH_TOKEN }}"   ] && missing+=("TWILIO_AUTH_TOKEN")
           [ -z "${{ secrets.TWILIO_PHONE_NUMBER }}" ] && missing+=("TWILIO_PHONE_NUMBER")
