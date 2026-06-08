@@ -49,7 +49,7 @@ jobs:
           echo "TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}"   >> $GITHUB_ENV
           echo "TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}" >> $GITHUB_ENV
           echo "SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}"     >> $GITHUB_ENV
-          echo "APP_ENV=production"                                    >> $GITHUB_ENV
+          echo "APP_ENV=${{ secrets.APP_ENV || 'production' }}"      >> $GITHUB_ENV
           echo "VOICE_LLM_PROVIDER=anthropic"                         >> $GITHUB_ENV
           echo "VISION_LLM_PROVIDER=anthropic"                        >> $GITHUB_ENV
 
