@@ -3,8 +3,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 
-# The static greeting Twilio plays before the first Gather.
-# Injected into messages history so Claude knows it was already said.
 INITIAL_GREETING = (
     "Hello, thank you for calling Sears Home Services. "
     "I'm Alex. How can I help you today?"
@@ -58,103 +56,103 @@ Get straight to the point — customers are calling because something is broken.
 
 
 TOOL_DEFINITIONS = [
-    {{
+    {
         "type": "function",
         "name": "find_available_technicians",
         "description": "Find technicians available for the caller's zip code and appliance type.",
-        "parameters": {{
+        "parameters": {
             "type": "object",
-            "properties": {{
-                "zip_code": {{"type": "string", "description": "5-digit US zip code"}},
-                "appliance_type": {{
+            "properties": {
+                "zip_code": {"type": "string", "description": "5-digit US zip code"},
+                "appliance_type": {
                     "type": "string",
                     "enum": ["washer", "dryer", "refrigerator", "dishwasher", "oven", "hvac", "other"],
-                }},
-                "preferred_date": {{
+                },
+                "preferred_date": {
                     "type": "string",
                     "description": "ISO date YYYY-MM-DD, default today",
-                }},
-            }},
+                },
+            },
             "required": ["zip_code", "appliance_type"],
-        }},
-    }},
-    {{
+        },
+    },
+    {
         "type": "function",
         "name": "book_appointment",
         "description": "Book a technician appointment after the caller confirms a time slot.",
-        "parameters": {{
+        "parameters": {
             "type": "object",
-            "properties": {{
-                "slot_id": {{"type": "integer"}},
-                "customer_name": {{"type": "string"}},
-                "customer_phone": {{"type": "string"}},
-                "zip_code": {{"type": "string"}},
-                "appliance_type": {{
+            "properties": {
+                "slot_id": {"type": "integer"},
+                "customer_name": {"type": "string"},
+                "customer_phone": {"type": "string"},
+                "zip_code": {"type": "string"},
+                "appliance_type": {
                     "type": "string",
                     "enum": ["washer", "dryer", "refrigerator", "dishwasher", "oven", "hvac", "other"],
-                }},
-                "symptoms": {{"type": "string"}},
-            }},
+                },
+                "symptoms": {"type": "string"},
+            },
             "required": [
                 "slot_id", "customer_name", "customer_phone",
                 "zip_code", "appliance_type", "symptoms",
             ],
-        }},
-    }},
-    {{
+        },
+    },
+    {
         "type": "function",
         "name": "collect_symptoms",
         "description": "Save structured symptom information to the call session context.",
-        "parameters": {{
+        "parameters": {
             "type": "object",
-            "properties": {{
-                "appliance_type": {{"type": "string"}},
-                "symptom_description": {{"type": "string"}},
-                "started_when": {{"type": "string"}},
-                "error_codes": {{
+            "properties": {
+                "appliance_type": {"type": "string"},
+                "symptom_description": {"type": "string"},
+                "started_when": {"type": "string"},
+                "error_codes": {
                     "type": "string",
                     "description": "Any error codes displayed, or 'none'",
-                }},
-            }},
+                },
+            },
             "required": ["appliance_type", "symptom_description"],
-        }},
-    }},
-    {{
+        },
+    },
+    {
         "type": "function",
         "name": "collect_callback_number",
         "description": "Record caller phone number for follow-up when no technician coverage exists.",
-        "parameters": {{
+        "parameters": {
             "type": "object",
-            "properties": {{
-                "phone_number": {{"type": "string"}},
-                "zip_code": {{"type": "string"}},
-                "appliance_type": {{"type": "string"}},
-            }},
+            "properties": {
+                "phone_number": {"type": "string"},
+                "zip_code": {"type": "string"},
+                "appliance_type": {"type": "string"},
+            },
             "required": ["phone_number"],
-        }},
-    }},
-    {{
+        },
+    },
+    {
         "type": "function",
         "name": "send_image_upload_link",
         "description": "Send an email with a unique image upload link to aid visual diagnosis.",
-        "parameters": {{
+        "parameters": {
             "type": "object",
-            "properties": {{
-                "email": {{"type": "string"}},
-                "appliance_type": {{"type": "string"}},
-                "symptoms": {{"type": "string"}},
-            }},
+            "properties": {
+                "email": {"type": "string"},
+                "appliance_type": {"type": "string"},
+                "symptoms": {"type": "string"},
+            },
             "required": ["email", "appliance_type"],
-        }},
-    }},
-    {{
+        },
+    },
+    {
         "type": "function",
         "name": "update_call_state",
         "description": "Persist the current conversation stage to the database.",
-        "parameters": {{
+        "parameters": {
             "type": "object",
-            "properties": {{
-                "new_state": {{
+            "properties": {
+                "new_state": {
                     "type": "string",
                     "enum": [
                         "GREETING", "APPLIANCE_ID", "SYMPTOM_COLLECTION", "DIAGNOSIS",
@@ -162,9 +160,9 @@ TOOL_DEFINITIONS = [
                         "BOOKING", "CONFIRMATION", "CALLBACK_CAPTURE", "TIER3_EMAIL",
                         "COMPLETED", "FAILED",
                     ],
-                }}
-            }},
+                }
+            },
             "required": ["new_state"],
-        }},
-    }},
+        },
+    },
 ]
