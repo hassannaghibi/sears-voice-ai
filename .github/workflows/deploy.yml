@@ -51,77 +51,41 @@ jobs:
           script: |
             set -e
             BRANCH="${{ github.head_ref || github.ref_name }}"
-            REPO_DIR=/root/sears-voice-ai
+            APP_DIR=/opt/sears-voice-ai
 
             echo "==> Pulling branch: $BRANCH"
-            cd $REPO_DIR
+            cd "$APP_DIR"
             git fetch origin
-            git checkout $BRANCH
-            git reset --hard origin/$BRANCH
+            git checkout "$BRANCH"
+            git reset --hard "origin/$BRANCH"
 
             echo "==> Writing .env"
-            cat > $REPO_DIR/.env << ENVEOF
-# Database
+            cat > "$APP_DIR/.env" << ENVEOF
 POSTGRES_HOST=db
 POSTGRES_PORT=5432
 POSTGRES_DB=sears_voice
 POSTGRES_USER=sears
 POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-
-# LLM provider selection (set to "anthropic" to use Claude, "openai" to use GPT)
 VOICE_LLM_PROVIDER=anthropic
 VISION_LLM_PROVIDER=anthropic
-
-# Anthropic (primary LLM - Claude)
 ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
-
-# OpenAI (optional - only needed if VOICE_LLM_PROVIDER or VISION_LLM_PROVIDER = "openai")
 OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-
-# Twilio
 TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}
 TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}
 TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}
-
-# App
 BASE_URL=${{ secrets.BASE_URL }}
 APP_ENV=production
 SECRET_KEY=${{ secrets.SECRET_KEY }}
 LOG_LEVEL=INFO
-
-# Tier 3 - Visual Diagnosis
 SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}
 FROM_EMAIL=alex@sears-voice.example.com
 UPLOAD_LINK_TTL_HOURS=24
 ENVEOF
+            chmod 600 "$APP_DIR/.env"
+            echo "==> Wrote $APP_DIR/.env"
 
-            echo "==> Building Docker images (this may take a few minutes)..."
-            docker compose build
-
-            echo "==> Starting containers"
-            docker compose down --remove-orphans
-            docker compose up -d
-
-            echo "==> Waiting for API to become healthy (up to 90s)..."
-            for i in $(seq 1 18); do
-              STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health || true)
-              if [ "$STATUS" = "200" ]; then
-                echo "API healthy after $((i*5))s"
-                break
-              fi
-              echo "  Attempt $i: status=$STATUS, waiting 5s..."
-              sleep 5
-            done
-
-            FINAL=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health || true)
-            if [ "$FINAL" != "200" ]; then
-              echo "ERROR: API did not become healthy. Last status: $FINAL"
-              docker compose logs --tail=80 api
-              exit 1
-            fi
-
-            echo "==> Deploy complete."
-            curl -s http://localhost:8000/health
+            echo "==> Running deploy script..."
+            bash "$APP_DIR/scripts/deploy.sh"
 
       - name: Post deployment summary
         if: success()
