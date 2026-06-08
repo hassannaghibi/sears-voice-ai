@@ -39,8 +39,8 @@ def _twiml_say_gather(text: str, action_url: str) -> str:
         '<?xml version="1.0" encoding="UTF-8"?>'
         "<Response>"
         f'<Say voice="{_VOICE}">{safe}</Say>'
-        f'<Gather input="speech" action="{action_url}" '
-        'speechTimeout="auto" speechModel="phone_call" enhanced="true"/>'
+        f'<Gather input="speech" action="{action_url}" method="POST" '
+        'speechTimeout="3" timeout="10"/>'
         f"<Redirect>{action_url}</Redirect>"
         "</Response>"
     )
