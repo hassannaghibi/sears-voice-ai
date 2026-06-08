@@ -46,7 +46,6 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           port: 22
           script_stop: true
-          request_pty: true
           command_timeout: 20m
           script: |
             set -e
