@@ -15,4 +15,3 @@ python-multipart==0.0.9
 structlog==24.2.0
 websockets==12.0
 aiosqlite==0.20.0
-audioop-lts==0.2.1
