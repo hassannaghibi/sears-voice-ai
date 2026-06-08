@@ -81,9 +81,10 @@ async def not_found_handler(request: Request, exc: NotFoundError):
 
 
 # Routers
-from app.api.v1.routes import appointments, health, technicians, voice  # noqa: E402
+from app.api.v1.routes import appointments, health, images, technicians, voice  # noqa: E402
 
 app.include_router(health.router)
 app.include_router(technicians.router, prefix="/api/v1")
 app.include_router(appointments.router, prefix="/api/v1")
+app.include_router(images.router, prefix="/api/v1")
 app.include_router(voice.router)

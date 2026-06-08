@@ -11,8 +11,8 @@ from app.models.call_session import CallState
 from app.models.technician import ApplianceType
 from app.repositories.call_session import CallSessionRepository
 from app.schemas.appointment import AppointmentCreate
-from app.services import email as email_service
-from app.services.scheduling import book_appointment, find_available_technicians
+from app.services import upload as upload_service
+from app.services.scheduling import book_appointment, find_availability_with_fallback, normalize_zip_code
 
 logger = get_logger(__name__)
 
@@ -21,9 +21,23 @@ async def handle_find_available_technicians(
     args: dict, db: AsyncSession, call_sid: str
 ) -> dict:
     start = time.perf_counter()
-    zip_code = args.get("zip_code", "")
+    raw_zip = args.get("zip_code", "")
     appliance_str = args.get("appliance_type", "other")
     preferred_date_str = args.get("preferred_date")
+
+    normalized_zip, zip_error = normalize_zip_code(raw_zip)
+    if zip_error == "partial_zip":
+        return {
+            "available": False,
+            "error": "partial_zip",
+            "message": "Please confirm your full 5-digit zip code.",
+        }
+    if zip_error == "invalid_zip" or not normalized_zip:
+        return {
+            "available": False,
+            "error": "invalid_zip",
+            "message": "That zip code does not look valid.",
+        }
 
     try:
         appliance_type = ApplianceType(appliance_str)
@@ -38,7 +52,10 @@ async def handle_find_available_technicians(
     else:
         preferred_date = date.today()
 
-    results = await find_available_technicians(zip_code, appliance_type, preferred_date, db)
+    search = await find_availability_with_fallback(
+        normalized_zip, appliance_type, preferred_date, db
+    )
+    results = search.technicians
     duration_ms = round((time.perf_counter() - start) * 1000, 1)
     logger.info(
         "tool_called",
@@ -46,10 +63,12 @@ async def handle_find_available_technicians(
         call_sid=call_sid,
         duration_ms=duration_ms,
         result_count=len(results),
+        matched_date=str(search.matched_date),
+        used_fallback=search.used_fallback_date,
     )
 
     if not results:
-        return {"available": False}
+        return {"available": False, "reason": "no_coverage"}
 
     options = []
     for r in results:
@@ -72,7 +91,13 @@ async def handle_find_available_technicians(
             }
         )
 
-    return {"available": True, "options": options}
+    response: dict = {"available": True, "options": options, "matched_date": str(search.matched_date)}
+    if search.used_fallback_date:
+        response["used_fallback_date"] = True
+        response["message"] = (
+            f"No slots on {preferred_date}; next availability is {search.matched_date}."
+        )
+    return response
 
 
 async def handle_book_appointment(
@@ -173,11 +198,10 @@ async def handle_send_image_upload_link(
     appliance_type = args.get("appliance_type", "appliance")
 
     try:
-        upload_url = await email_service.send_upload_link(email, appliance_type, call_sid)
-        session_repo = CallSessionRepository(db)
-        await session_repo.update_context(
-            call_sid, {"upload_email": email, "upload_url": upload_url}
+        token, upload_url = await upload_service.create_upload_link(
+            db, call_sid, email, appliance_type
         )
+        session_repo = CallSessionRepository(db)
         await session_repo.update_state(call_sid, CallState.TIER3_EMAIL)
         duration_ms = round((time.perf_counter() - start) * 1000, 1)
         logger.info(
@@ -186,7 +210,7 @@ async def handle_send_image_upload_link(
             call_sid=call_sid,
             duration_ms=duration_ms,
         )
-        return {"sent": True, "email": email}
+        return {"sent": True, "email": email, "upload_url": upload_url}
     except Exception as exc:
         duration_ms = round((time.perf_counter() - start) * 1000, 1)
         logger.error(

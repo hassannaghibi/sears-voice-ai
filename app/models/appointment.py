@@ -54,11 +54,11 @@ class Appointment(Base, TimestampMixin):
     customer_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     zip_code: Mapped[str] = mapped_column(String(10), nullable=False)
     appliance_type: Mapped[ApplianceType] = mapped_column(
-        Enum(ApplianceType, native_enum=False), nullable=False
+        Enum(ApplianceType, name="appliancetype", native_enum=True, create_constraint=False), nullable=False
     )
     symptoms: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[AppointmentStatus] = mapped_column(
-        Enum(AppointmentStatus, native_enum=False),
+        Enum(AppointmentStatus, name="appointmentstatus", native_enum=True, create_constraint=False),
         default=AppointmentStatus.pending,
         server_default="pending",
         nullable=False,

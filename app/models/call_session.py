@@ -32,7 +32,7 @@ class CallSession(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     call_sid: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     state: Mapped[CallState] = mapped_column(
-        Enum(CallState, native_enum=False),
+        Enum(CallState, name="callstate", native_enum=True, create_constraint=False),
         default=CallState.GREETING,
         nullable=False,
     )
