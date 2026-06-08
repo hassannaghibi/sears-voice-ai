@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from typing import Literal
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+LLMProvider = Literal["openai", "anthropic"]
 
 
 class Settings(BaseSettings):
@@ -13,13 +18,22 @@ class Settings(BaseSettings):
     postgres_user: str = "sears"
     postgres_password: str = "changeme"
 
-    # OpenAI
-    openai_api_key: str
+    # LLM providers — set VOICE_LLM_PROVIDER / VISION_LLM_PROVIDER to "openai" or "anthropic"
+    voice_llm_provider: LLMProvider = "openai"
+    vision_llm_provider: LLMProvider = "openai"
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+    openai_realtime_model: str = "gpt-4o-realtime-preview"
+    openai_vision_model: str = "gpt-4o"
+    anthropic_model: str = "claude-sonnet-4-6"
 
     # Twilio
     twilio_account_sid: str
     twilio_auth_token: str
     twilio_phone_number: str
+    twilio_api_key_sid: str = ""
+    twilio_api_key_secret: str = ""
+    twilio_twiml_app_sid: str = ""
 
     # App
     base_url: str
@@ -31,6 +45,18 @@ class Settings(BaseSettings):
     sendgrid_api_key: str = ""
     from_email: str = "alex@sears-voice.example.com"
     upload_link_ttl_hours: int = 24
+
+    @model_validator(mode="after")
+    def validate_provider_keys(self) -> Settings:
+        if self.voice_llm_provider == "openai" and not self.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is required when VOICE_LLM_PROVIDER=openai")
+        if self.voice_llm_provider == "anthropic" and not self.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY is required when VOICE_LLM_PROVIDER=anthropic")
+        if self.vision_llm_provider == "openai" and not self.openai_api_key:
+            raise ValueError("OPENAI_API_KEY is required when VISION_LLM_PROVIDER=openai")
+        if self.vision_llm_provider == "anthropic" and not self.anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY is required when VISION_LLM_PROVIDER=anthropic")
+        return self
 
     @property
     def database_url(self) -> str:

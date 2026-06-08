@@ -1,0 +1,91 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev]
+    types: [closed]
+
+jobs:
+  deploy:
+    if: github.event_name == 'push' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Validate required secrets
+        run: |
+          missing=()
+          [ -z "${{ secrets.SSH_HOST }}"            ] && missing+=("SSH_HOST")
+          [ -z "${{ secrets.SSH_USER }}"            ] && missing+=("SSH_USER")
+          [ -z "${{ secrets.SSH_PASSWORD }}"        ] && missing+=("SSH_PASSWORD")
+          [ -z "${{ secrets.POSTGRES_PASSWORD }}"   ] && missing+=("POSTGRES_PASSWORD")
+          [ -z "${{ secrets.SECRET_KEY }}"          ] && missing+=("SECRET_KEY")
+          [ -z "${{ secrets.BASE_URL }}"            ] && missing+=("BASE_URL")
+          [ -z "${{ secrets.ANTHROPIC_API_KEY }}"   ] && missing+=("ANTHROPIC_API_KEY")
+          [ -z "${{ secrets.TWILIO_ACCOUNT_SID }}"  ] && missing+=("TWILIO_ACCOUNT_SID")
+          [ -z "${{ secrets.TWILIO_AUTH_TOKEN }}"   ] && missing+=("TWILIO_AUTH_TOKEN")
+          [ -z "${{ secrets.TWILIO_PHONE_NUMBER }}" ] && missing+=("TWILIO_PHONE_NUMBER")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+          echo "All required secrets present."
+
+      - name: Export secrets as env vars for SSH
+        run: |
+          echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"   >> $GITHUB_ENV
+          echo "SECRET_KEY=${{ secrets.SECRET_KEY }}"                 >> $GITHUB_ENV
+          echo "BASE_URL=${{ secrets.BASE_URL }}"                     >> $GITHUB_ENV
+          echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}"   >> $GITHUB_ENV
+          echo "OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}"         >> $GITHUB_ENV
+          echo "TWILIO_ACCOUNT_SID=${{ secrets.TWILIO_ACCOUNT_SID }}" >> $GITHUB_ENV
+          echo "TWILIO_AUTH_TOKEN=${{ secrets.TWILIO_AUTH_TOKEN }}"   >> $GITHUB_ENV
+          echo "TWILIO_PHONE_NUMBER=${{ secrets.TWILIO_PHONE_NUMBER }}" >> $GITHUB_ENV
+          echo "SENDGRID_API_KEY=${{ secrets.SENDGRID_API_KEY }}"     >> $GITHUB_ENV
+          echo "FROM_EMAIL=${{ secrets.FROM_EMAIL }}"                     >> $GITHUB_ENV
+          echo "APP_ENV=${{ secrets.APP_ENV || 'production' }}"      >> $GITHUB_ENV
+          echo "VOICE_LLM_PROVIDER=anthropic"                         >> $GITHUB_ENV
+          echo "VISION_LLM_PROVIDER=anthropic"                        >> $GITHUB_ENV
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: 22
+          script_stop: true
+          command_timeout: 10m
+          envs: POSTGRES_PASSWORD,SECRET_KEY,BASE_URL,ANTHROPIC_API_KEY,OPENAI_API_KEY,TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN,TWILIO_PHONE_NUMBER,SENDGRID_API_KEY,FROM_EMAIL,APP_ENV,VOICE_LLM_PROVIDER,VISION_LLM_PROVIDER
+          script: |
+            set -e
+            BRANCH="${{ github.head_ref || github.ref_name }}"
+            APP_DIR=/opt/sears-voice-ai
+
+            echo "==> Pulling branch: $BRANCH"
+            cd "$APP_DIR"
+            git fetch origin
+            git checkout "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+
+            echo "==> Writing .env"
+            bash "$APP_DIR/write-env.sh"
+
+            echo "==> Deploying..."
+            bash "$APP_DIR/scripts/deploy.sh"
+
+      - name: Post deployment summary
+        if: success()
+        run: |
+          echo "### Deployment successful" >> $GITHUB_STEP_SUMMARY
+          echo "- Branch: \`${{ github.head_ref || github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Server: \`${{ secrets.SSH_HOST }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Health: \`${{ secrets.BASE_URL }}/health\`" >> $GITHUB_STEP_SUMMARY

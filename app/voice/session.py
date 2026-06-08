@@ -12,12 +12,15 @@ from app.voice.prompts import TOOL_DEFINITIONS, build_system_prompt
 
 logger = get_logger(__name__)
 
-OPENAI_WS_URL = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"
+
+def openai_realtime_url() -> str:
+    return f"wss://api.openai.com/v1/realtime?model={settings.openai_realtime_model}"
 
 
 class RealtimeSession:
-    def __init__(self, call_sid: str) -> None:
+    def __init__(self, call_sid: str, extra_instructions: str = "") -> None:
         self.call_sid = call_sid
+        self.extra_instructions = extra_instructions
         self.ws: websockets.WebSocketClientProtocol | None = None
         self.session_id: str | None = None
 
@@ -27,7 +30,7 @@ class RealtimeSession:
         for attempt in range(max_attempts):
             try:
                 self.ws = await websockets.connect(
-                    OPENAI_WS_URL,
+                    openai_realtime_url(),
                     additional_headers={
                         "Authorization": f"Bearer {settings.openai_api_key}",
                         "OpenAI-Beta": "realtime=v1",
@@ -69,7 +72,7 @@ class RealtimeSession:
                     },
                     "tools": TOOL_DEFINITIONS,
                     "tool_choice": "auto",
-                    "instructions": build_system_prompt(),
+                    "instructions": build_system_prompt() + self.extra_instructions,
                 },
             }
         )

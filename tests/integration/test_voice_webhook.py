@@ -31,15 +31,18 @@ async def test_inbound_invalid_signature_returns_403(async_client):
 
 
 @pytest.mark.asyncio
-async def test_inbound_valid_signature_returns_twiml(async_client):
+async def test_inbound_valid_signature_returns_twiml(async_client, monkeypatch):
     """A valid X-Twilio-Signature must return 200 with TwiML Connect/Stream."""
-    call_sid = "CA_test_valid_sig"
-    params = {"CallSid": call_sid, "From": "+13125550001"}
+    call_sid = "CA_test_valid_sig_2"
     url = "http://test/voice/inbound"
+    params = {"CallSid": call_sid, "From": "+13125550001"}
+
+    # Align settings.base_url to the test client base URL so the validator passes
+    monkeypatch.setattr(settings, "base_url", "http://test")
 
     sig = compute_signature(url, params, settings.twilio_auth_token)
-
     body = "&".join(f"{k}={v}" for k, v in params.items())
+
     response = await async_client.post(
         "/voice/inbound",
         content=body,
@@ -48,8 +51,6 @@ async def test_inbound_valid_signature_returns_twiml(async_client):
             "X-Twilio-Signature": sig,
         },
     )
-    # The Twilio validator checks against the full public URL, so in tests
-    # it may fail unless BASE_URL matches. We accept 200 (valid) or 403 (URL mismatch).
-    assert response.status_code in {200, 403}
-    if response.status_code == 200:
-        assert b"<Stream" in response.content or b"<Connect>" in response.content
+    assert response.status_code == 200
+    assert b"<Stream" in response.content
+    assert b"<Connect>" in response.content
